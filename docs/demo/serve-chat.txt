@@ -1,0 +1,10 @@
+$ llmft chat "I was charged twice this month and the refund has not arrived." --model triage-lora
+{'model': 'triage-lora', 'reply': '{"category": "refund", "priority": "normal"}', 'parsed': {'category': 'refund', 'priority': 'normal'}}
+$ llmft chat "My parcel says delivered but nothing is at my door, please help urgently" --model triage-lora
+{'model': 'triage-lora', 'reply': '{"category": "shipping", "priority": "urgent"}', 'parsed': {'category': 'shipping', 'priority': 'urgent'}}
+$ llmft chat "I cannot log in to my account since the password reset." --model triage-lora
+{'model': 'triage-lora', 'reply': '{"category": "account", "priority": "normal"}', 'parsed': {'category': 'account', 'priority': 'normal'}}
+$ llmft chat "I cannot log in to my account since the password reset." --model base
+{'model': 'base', 'reply': '{"category": shipping|billing|refund|account|technical, "priority": low|normal|high|urgent}.', 'parsed': None}
+$ curl /v1/chat/completions (raw, model=triage-lora)
+{"id":"chatcmpl-a7d512d7ee51435f87c82dd3","object":"chat.completion","created":1793086509,"model":"triage-lora","choices":[{"index":0,"message":{"role":"assistant","content":"hi there"},"finish_reason":"stop"}],"usage":{"prompt_tokens":16,"completion_tokens":2,"total_tokens":18}}

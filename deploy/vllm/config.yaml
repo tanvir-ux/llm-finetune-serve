@@ -1,0 +1,14 @@
+# vLLM server config for the base model plus the LoRA adapter produced by `llmft train`.
+# STATUS: not executed here (vLLM needs a GPU and this build ran on CPU only).
+# Usage:  vllm serve --config deploy/vllm/config.yaml
+model: HuggingFaceTB/SmolLM2-135M-Instruct
+served-model-name: base
+host: 0.0.0.0
+port: 8000
+dtype: bfloat16
+max-model-len: 1024
+enable-lora: true
+max-lora-rank: 16
+max-loras: 1
+# name=path: requests with "model": "triage-lora" use the adapter, "base" uses the plain model.
+lora-modules: triage-lora=models/triage-lora

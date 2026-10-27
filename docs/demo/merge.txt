@@ -1,0 +1,18 @@
+$ llmft merge --out artifacts/merged --tar artifacts/model.tar.gz
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|██████████| 1/1 [00:00<00:00,  3.61it/s]Writing model shards: 100%|██████████| 1/1 [00:00<00:00,  3.60it/s]
+merged model written to artifacts/merged
+tarball written to artifacts/model.tar.gz
+  -rw-r--r-- 1 box box 445198808 Oct 27 03:37 artifacts/model.tar.gz
+  
+  artifacts/merged:
+  total 528952
+  drwxr-xr-x 2 box box      4096 Oct 27 03:35 .
+  drwxr-xr-x 4 box box      4096 Oct 27 03:35 ..
+  -rw-r--r-- 1 box box       368 Oct 27 03:35 chat_template.jinja
+  -rw-r--r-- 1 box box       905 Oct 27 03:35 config.json
+  -rw-r--r-- 1 box box       132 Oct 27 03:35 generation_config.json
+  -rw------- 1 box box 538090408 Oct 27 03:35 model.safetensors
+  -rw-r--r-- 1 box box   3522871 Oct 27 03:35 tokenizer.json
+  -rw-r--r-- 1 box box       453 Oct 27 03:35 tokenizer_config.json
+$ python: generate with the merged model (no adapter loaded)
+{"category": "shipping", "priority": "urgent"}

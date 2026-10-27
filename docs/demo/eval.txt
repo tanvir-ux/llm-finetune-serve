@@ -1,0 +1,7 @@
+$ llmft eval
+| model | test set | n | valid JSON | category | priority | exact match |
+|---|---|---|---|---|---|---|
+| base | test_seen | 60 | 0% | 0% | 0% | 0% |
+| base | test_unseen | 40 | 0% | 0% | 0% | 0% |
+| tuned | test_seen | 60 | 100% | 100% | 90% | 90% |
+| tuned | test_unseen | 40 | 100% | 78% | 45% | 35% |

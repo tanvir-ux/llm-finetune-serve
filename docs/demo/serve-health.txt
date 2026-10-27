@@ -1,0 +1,4 @@
+$ curl localhost:18473/health
+{"status":"ok","loaded":false,"base":"HuggingFaceTB/SmolLM2-135M-Instruct","adapter":"artifacts/adapter"}
+$ curl localhost:18473/v1/models
+{"object":"list","data":[{"id":"triage-lora","object":"model","created":1793086453,"owned_by":"llm-finetune-serve"},{"id":"base","object":"model","created":1793086453,"owned_by":"llm-finetune-serve"}]}

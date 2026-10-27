@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llm-finetune-serve"
+version = "0.1.0"
+description = "LoRA fine-tuning of a small causal LM on CPU with PyTorch and PEFT, an OpenAI-compatible server, a vLLM config and SageMaker / Vertex AI deployment code"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Md Tanvir Alam" }]
+requires-python = ">=3.11"
+dependencies = [
+  "torch>=2.4",
+  "transformers>=4.50",
+  "peft>=0.14",
+  "accelerate>=1.0",
+  "safetensors>=0.4",
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "httpx>=0.27",
+  "openai>=1.50",
+  "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+cloud = ["boto3>=1.35", "pyyaml>=6"]
+qlora = ["bitsandbytes>=0.43"]
+dev = ["pytest>=8", "ruff>=0.6", "boto3>=1.35", "pyyaml>=6", "tokenizers>=0.20"]
+
+[project.scripts]
+llmft = "llm_finetune_serve.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/llm_finetune_serve"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

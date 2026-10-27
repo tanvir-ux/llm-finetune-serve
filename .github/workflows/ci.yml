@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: lint + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt -r requirements-dev.txt && pip install --no-deps -e .
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest -q
+
+  docker:
+    name: docker image builds and serves the fine-tuned model
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t llm-finetune-serve .
+      - run: |
+          docker run -d --name srv -p 7860:7860 llm-finetune-serve
+          for i in $(seq 1 30); do curl -sf localhost:7860/health && break || sleep 2; done
+          curl -sf localhost:7860/health
+          curl -sf localhost:7860/v1/models | grep triage-lora
+          # first call downloads the 135M base model, then generates with the committed adapter
+          docker exec srv llmft chat "I was charged twice this month and the refund has not arrived." \
+            --base-url http://127.0.0.1:7860/v1 | tee out.txt
+          grep -q category out.txt

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>llm-finetune-serve: a small model taught a new skill</title>
+<style>
+  :root { --ink:#17212b; --mut:#5b6b7a; --line:#d9e1e8; --bg:#f5f8fa; --card:#fff; --acc:#2456d6; --ok:#0b7a3b; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:#10243e; color:#fff; padding:22px 20px; }
+  header h1 { margin:0 0 4px; font-size:22px; } header p { margin:0; max-width:820px; color:#c9d6e6; }
+  main { max-width:1000px; margin:0 auto; padding:18px 16px 50px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin:16px 0; }
+  section.explain { border-left:4px solid var(--acc); }
+  h2 { margin:0 0 8px; font-size:17px; }
+  .mut { color:var(--mut); font-size:13px; }
+  button.chip { font:inherit; font-size:13px; border:1px solid var(--line); background:#fff; border-radius:7px; padding:5px 9px; margin:3px 4px 3px 0; cursor:pointer; text-align:left; }
+  button.chip:hover { border-color:var(--acc); } button.chip.on { background:#e8efff; border-color:var(--acc); }
+  .grp { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--mut); margin:10px 0 2px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; } @media (max-width:760px){ .cols{grid-template-columns:1fr;} }
+  .panel { border:1px solid var(--line); border-radius:8px; padding:12px; background:#fcfdfe; }
+  .panel h3 { margin:0 0 6px; font-size:14px; }
+  pre { margin:6px 0; padding:9px 10px; background:#f0f4f8; border-radius:6px; white-space:pre-wrap; word-break:break-word; font:12.5px/1.45 ui-monospace,Consolas,monospace; }
+  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
+  table { border-collapse:collapse; width:100%; font-size:14px; } th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--mut); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .bar { display:inline-block; height:9px; border-radius:5px; background:var(--acc); vertical-align:middle; margin-right:6px; }
+  .bar.base { background:#9aa7b5; }
+  svg text { font:11px system-ui,sans-serif; fill:#5b6b7a; }
+  code { background:#eef2f6; padding:1px 5px; border-radius:4px; font-size:13px; }
+  a { color:var(--acc); }
+  .pill { display:inline-block; font-size:11px; padding:1px 8px; border-radius:99px; background:#fff3d6; color:#7a5200; margin-left:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>llm-finetune-serve</h1>
+  <p>A small open language model learns a new job (sorting customer support tickets into strict JSON) after a few minutes of LoRA fine-tuning on a CPU. Click a ticket to see what the model said before and after.</p>
+</header>
+<main>
+<section class="explain">
+  <h2>What you are looking at</h2>
+  <p><b>Fine-tuning</b> means giving an existing AI model extra practice on examples of one specific task. <b>LoRA</b> does this cheaply: instead of changing all 135 million numbers inside the model, it trains a small add-on (<span id="trainable">about 2%</span> of the size) and leaves the original untouched.</p>
+  <p>The job here: read a support ticket and answer <i>only</i> with <code>{"category": ..., "priority": ...}</code>. The original model chats instead of following the format. After training it answers in the right format, usually with the right labels.</p>
+  <ol>
+    <li>Pick a ticket below (these tickets were never used for training).</li>
+    <li>Compare the <b>original model</b> with the <b>fine-tuned model</b> and the expected answer.</li>
+    <li>Scroll down for the scores over all test tickets, and the training loss curve (loss falling means the model is learning).</li>
+  </ol>
+  <p class="mut">Everything on this page is a <b>recording</b> of real runs on a CPU: it does not call a live model. The tickets are synthetic (generated from templates), so the scores show the method works, not how it would do on real customer text. <span id="notice"></span></p>
+</section>
+
+<section>
+  <h2>1. Choose a test ticket</h2>
+  <div id="chips"></div>
+  <div class="cols" style="margin-top:12px">
+    <div class="panel"><h3>Original model <span class="mut">(no fine-tuning)</span></h3><pre id="base">Pick a ticket above.</pre><div id="bv"></div></div>
+    <div class="panel"><h3>Fine-tuned model <span class="mut">(base + LoRA adapter)</span></h3><pre id="tuned"></pre><div id="tv"></div></div>
+  </div>
+  <div class="panel" style="margin-top:12px"><h3>Ticket and expected answer</h3><pre id="ticket"></pre><pre id="expected"></pre></div>
+</section>
+
+<section>
+  <h2>2. Scores on held-out tickets</h2>
+  <p class="mut">"Seen style" = new tickets written from the same sentence patterns as training. "Unseen wording" = sentence patterns and urgency phrases the model never saw in training. "Exact match" needs valid JSON with both labels right.</p>
+  <table id="scores"></table>
+</section>
+
+<section>
+  <h2>3. Training loss</h2>
+  <p class="mut">Loss measures how surprised the model is by the correct answer; lower is better. Thin line: each training step. Thick line: smoothed. Dots: validation loss on tickets that are not trained on.</p>
+  <svg id="loss" viewBox="0 0 900 300" width="100%" role="img" aria-label="Training and validation loss curves"></svg>
+  <div class="mut" id="trainmeta"></div>
+</section>
+
+<section>
+  <h2>4. Serving it</h2>
+  <p>The repository ships an OpenAI-compatible server, so any OpenAI client can talk to the fine-tuned model:</p>
+<pre>llmft serve --adapter artifacts/adapter          # runs on CPU
+curl localhost:8000/v1/chat/completions -H 'content-type: application/json' \
+  -d '{"model":"triage-lora","messages":[{"role":"user","content":"..."}]}'</pre>
+  <p class="mut">For GPUs there is a vLLM config (not executed in this build), and SageMaker and Vertex AI deployment code that was unit-tested but never run against a real cloud account. See the <a href="https://github.com/tanvir-ux/llm-finetune-serve">README</a> for the exact status of each piece.</p>
+</section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let DATA, current = null;
+
+function verdict(row) {
+  if (row.exact) return '<span class="ok">✓ exactly right</span>';
+  if (!row.valid_json) return '<span class="bad">✗ not valid triage JSON</span>';
+  return '<span class="bad">✗ valid JSON but a label is wrong</span>';
+}
+function show(set, i) {
+  const b = DATA.eval.base[set].rows[i], t = DATA.eval.tuned[set].rows[i];
+  current = set + i;
+  document.querySelectorAll('button.chip').forEach(c => c.classList.toggle('on', c.dataset.k === current));
+  $('ticket').textContent = 'Ticket: ' + b.ticket;
+  $('expected').textContent = 'Expected: ' + b.expected;
+  $('base').textContent = b.output || '(empty reply)'; $('bv').innerHTML = verdict(b);
+  $('tuned').textContent = t.output || '(empty reply)'; $('tv').innerHTML = verdict(t);
+}
+function chips() {
+  const el = $('chips'); el.innerHTML = '';
+  const titles = { test_seen: 'Same sentence patterns as training', test_unseen: 'New wording never seen in training' };
+  for (const set of ['test_seen', 'test_unseen']) {
+    const g = document.createElement('div'); g.className = 'grp'; g.textContent = titles[set]; el.appendChild(g);
+    DATA.eval.base[set].rows.slice(0, 40).forEach((r, i) => {
+      if (i >= DATA.examples_per_set) return;
+      const b = document.createElement('button'); b.className = 'chip'; b.dataset.k = set + i;
+      b.textContent = r.ticket.length > 70 ? r.ticket.slice(0, 68) + '…' : r.ticket;
+      b.onclick = () => show(set, i); el.appendChild(b);
+    });
+  }
+}
+function scores() {
+  const names = { test_seen: 'Seen style', test_unseen: 'Unseen wording' };
+  let h = '<tr><th>Test set</th><th>Model</th><th>Tickets</th><th>Valid JSON</th><th>Category</th><th>Priority</th><th>Exact match</th></tr>';
+  const cell = (v, cls) => `<td><span class="bar ${cls}" style="width:${Math.round(v * 60)}px"></span>${Math.round(v * 100)}%</td>`;
+  for (const set of ['test_seen', 'test_unseen']) for (const m of ['base', 'tuned']) {
+    const r = DATA.eval[m][set], cls = m === 'base' ? 'base' : '';
+    h += `<tr><td>${names[set]}</td><td>${m === 'base' ? 'Original' : '<b>Fine-tuned</b>'}</td><td>${r.n}</td>` +
+      cell(r.valid_json, cls) + cell(r.category_accuracy, cls) + cell(r.priority_accuracy, cls) + cell(r.exact_match, cls) + '</tr>';
+  }
+  $('scores').innerHTML = h;
+}
+function smooth(a, k) { return a.map((_, i) => { const s = a.slice(Math.max(0, i - k), i + 1); return s.reduce((x, y) => x + y, 0) / s.length; }); }
+function loss() {
+  const steps = DATA.train.steps, W = 900, H = 300, L = 46, R = 12, T = 12, B = 34;
+  const xs = steps.map(s => s.step), ys = steps.map(s => s.loss), sm = smooth(ys, 5);
+  const xmax = Math.max(...xs), ymax = Math.max(...ys, ...DATA.train.val.map(v => v.loss)) * 1.05;
+  const X = v => L + (v / xmax) * (W - L - R), Y = v => T + (1 - v / ymax) * (H - T - B);
+  const path = (px, py) => px.map((x, i) => (i ? 'L' : 'M') + X(x).toFixed(1) + ' ' + Y(py[i]).toFixed(1)).join(' ');
+  let s = '';
+  for (let i = 0; i <= 4; i++) { const v = ymax * i / 4; s += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e5ebf0"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${v.toFixed(2)}</text>`; }
+  const spe = DATA.train.steps_per_epoch;
+  for (let e = 0; e * spe <= xmax; e++) s += `<text x="${X(e * spe)}" y="${H - 14}" text-anchor="middle">${e === 0 ? 'start' : 'epoch ' + e}</text>`;
+  s += `<path d="${path(xs, ys)}" fill="none" stroke="#9fb6ea" stroke-width="1"/>`;
+  s += `<path d="${path(xs, sm)}" fill="none" stroke="#2456d6" stroke-width="2.5"/>`;
+  s += DATA.train.val.map(v => `<circle cx="${X(v.step)}" cy="${Y(v.loss)}" r="4.5" fill="#d9480f"><title>validation loss ${v.loss.toFixed(3)} at step ${v.step}</title></circle>`).join('');
+  s += `<text x="${W - R}" y="${T + 12}" text-anchor="end">blue: training loss · orange dots: validation loss</text>`;
+  $('loss').innerHTML = s;
+  const t = DATA.train;
+  $('trainmeta').textContent = `${t.steps.length} steps (batch ${t.config.batch_size}, ${t.config.epochs} epochs), ${t.seconds} s on CPU, ` +
+    `LoRA rank ${t.config.lora_r}: ${t.trainable_params.toLocaleString()} trainable of ${t.total_params.toLocaleString()} parameters ` +
+    `(${(100 * t.trainable_params / t.total_params).toFixed(2)}%). Validation loss ${t.val[0].loss.toFixed(3)} → ${t.val[t.val.length - 1].loss.toFixed(3)}.`;
+  $('trainable').textContent = (100 * t.trainable_params / t.total_params).toFixed(1) + '%';
+}
+fetch('results.json').then(r => r.json()).then(d => {
+  DATA = d; chips(); scores(); loss();
+  $('notice').innerHTML = '<span class="pill">recorded results</span>';
+  show('test_seen', 0);
+}).catch(e => { document.body.insertAdjacentHTML('beforeend', '<p style="padding:20px;color:#b3261e">Could not load results.json: ' + esc(e) + '</p>'); });
+</script>
+</body>
+</html>
